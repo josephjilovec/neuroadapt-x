@@ -1,5 +1,20 @@
-# Object file
-*.o
+Standard Python/Machine Learning Ignores
 
-# Ada Library Information
-*.ali
+.DS_Store
+*.pyc
+pycache/
+venv/
+.env
+
+Notebook and Data Ignores
+
+Ignore large model files and generated data
+
+/data/
+/models/*.pth
+
+IDE and Editor Ignores
+
+.vscode/
+.idea/
+*.swp
