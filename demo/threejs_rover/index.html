@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NeuroAdapt-X 3D Rover Control</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            background-color: #0d1117; /* GitHub Dark Theme */
+        }
+        canvas {
+            display: block;
+        }
+        #info {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 1rem;
+            pointer-events: none;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div id="info" class="text-white text-lg space-y-2">
+        <h1 class="text-3xl font-bold text-yellow-300">NeuroAdapt-X BCI Link</h1>
+        <div id="status-display" class="p-4 rounded-lg shadow-xl backdrop-blur-sm bg-gray-800 bg-opacity-70">
+            <p><span class="font-semibold text-gray-400">Current Command:</span> <span id="bci-command" class="font-mono text-xl text-green-400">NEUTRAL</span></p>
+            <p><span class="font-semibold text-gray-400">Confidence:</span> <span id="bci-confidence">0.00</span></p>
+            <p><span class="font-semibold text-gray-400">Adaptation:</span> <span id="bci-adapt">STABLE</span></p>
+        </div>
+        <div class="mt-4 text-sm text-gray-500">
+            *Simulation: Press A/D to simulate LEFT/RIGHT BCI commands.
+        </div>
+    </div>
+    <div id="container"></div>
+
+    <script>
+        // --- THREE.JS SETUP ---
+        let scene, camera, renderer, rover, clock;
+        let BCI_COMMAND = 'NEUTRAL';
+        let BCI_CONFIDENCE = 0.5;
+        let BCI_ADAPTATION = 'STABLE';
+        const ROVER_SPEED = 0.05; // Base movement speed
+        const ROTATION_SPEED = 0.03; // Base rotation speed
+
+        function init() {
+            // Scene Setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0d1117); // Dark background
+            clock = new THREE.Clock();
+
+            // Camera Setup
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 5, 10);
+            camera.lookAt(0, 0, 0);
+
+            // Renderer Setup
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.getElementById('container').appendChild(renderer.domElement);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0x404040, 5); // soft white light
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 3);
+            directionalLight.position.set(5, 10, 7.5);
+            scene.add(directionalLight);
+
+            // Rover Model
+            rover = createRover();
+            scene.add(rover);
+
+            // Ground/Plane
+            createGround();
+
+            // Event Listeners
+            window.addEventListener('resize', onWindowResize, false);
+            document.addEventListener('keydown', onKeyDown, false);
+            document.addEventListener('keyup', onKeyUp, false);
+
+            // Start Mock BCI Command Injector
+            setInterval(mockBCIInjector, 100); 
+        }
+
+        function createRover() {
+            const group = new THREE.Group();
+            
+            // 1. Main Body (Red/Orange)
+            const bodyGeometry = new THREE.BoxGeometry(2, 0.5, 3);
+            const bodyMaterial = new THREE.MeshLambertMaterial({ color: 0xff6600, flatShading: true });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            group.add(body);
+
+            // 2. Cabin/Sensor Head (Glass/White)
+            const cabinGeometry = new THREE.BoxGeometry(1.5, 0.8, 1);
+            const cabinMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff, opacity: 0.8, transparent: true });
+            const cabin = new THREE.Mesh(cabinGeometry, cabinMaterial);
+            cabin.position.set(0, 0.65, -0.5);
+            group.add(cabin);
+
+            // 3. Thrusters/Wheels (Dark grey)
+            const wheelGeometry = new THREE.CylinderGeometry(0.3, 0.3, 2, 8);
+            const wheelMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+
+            const wheel1 = new THREE.Mesh(wheelGeometry, wheelMaterial);
+            wheel1.rotation.z = Math.PI / 2;
+            wheel1.position.set(1.1, -0.3, 1);
+            group.add(wheel1);
+
+            const wheel2 = new THREE.Mesh(wheelGeometry, wheelMaterial);
+            wheel2.rotation.z = Math.PI / 2;
+            wheel2.position.set(-1.1, -0.3, 1);
+            group.add(wheel2);
+            
+            return group;
+        }
+
+        function createGround() {
+            // Simple gray plane for the ground/moon surface
+            const geometry = new THREE.PlaneGeometry(50, 50);
+            const material = new THREE.MeshLambertMaterial({ color: 0x2f4f4f, side: THREE.DoubleSide });
+            const plane = new THREE.Mesh(geometry, material);
+            plane.rotation.x = Math.PI / 2; // Rotate to be flat
+            scene.add(plane);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Global keys state for manual BCI simulation
+        const keys = { 'a': false, 'd': false };
+
+        function onKeyDown(event) {
+            if (event.key === 'a') keys['a'] = true;
+            if (event.key === 'd') keys['d'] = true;
+        }
+
+        function onKeyUp(event) {
+            if (event.key === 'a') keys['a'] = false;
+            if (event.key === 'd') keys['d'] = false;
+        }
+        
+        // Function to be called by external process (or mock)
+        function receive_bci_command(command, confidence, adaptationStatus) {
+            BCI_COMMAND = command;
+            BCI_CONFIDENCE = confidence;
+            BCI_ADAPTATION = adaptationStatus;
+        }
+
+        let mockTime = 0;
+        function mockBCIInjector() {
+            // Mock the time progression from the Streamlit demo
+            mockTime += 0.1; 
+
+            let command = 'NEUTRAL';
+            let confidence = 0.5;
+            let adapt = 'STABLE';
+
+            if (keys['a']) {
+                command = 'LEFT';
+                confidence = 0.95;
+            } else if (keys['d']) {
+                command = 'RIGHT';
+                confidence = 0.95;
+            } else if (mockTime < 10) {
+                // 1. Baseline: High confidence, neutral for simplicity
+                command = 'NEUTRAL';
+                confidence = 0.90;
+            } else if (mockTime < 30) {
+                // 2. Stress Period: Confidence drops, Adaptation active
+                command = 'NEUTRAL';
+                confidence = Math.random() * 0.15 + 0.5; // 0.5 to 0.65
+                adapt = 'ADAPTING';
+            } else if (mockTime < 40) {
+                // 3. Recovery: Confidence climbs back up
+                command = 'RIGHT';
+                confidence = Math.min(0.9, 0.7 + (mockTime - 30) * 0.05);
+                adapt = 'STABLE';
+            } else {
+                // 4. Post-Adaptation: Resumed high performance
+                command = 'LEFT';
+                confidence = 0.95;
+                adapt = 'STABLE';
+            }
+
+            receive_bci_command(command, confidence, adapt);
+        }
+
+        function updateRoverMovement() {
+            const deltaTime = clock.getDelta(); // Time elapsed since last frame
+
+            // 1. Apply BCI Rotation (based on BCI_COMMAND state)
+            if (BCI_COMMAND === 'LEFT') {
+                rover.rotation.y += ROTATION_SPEED * deltaTime * 60;
+                // Add a slight forward thrust visual effect when commanded
+                rover.position.z -= ROVER_SPEED * deltaTime * 0.5; 
+            } else if (BCI_COMMAND === 'RIGHT') {
+                rover.rotation.y -= ROTATION_SPEED * deltaTime * 60;
+                // Add a slight forward thrust visual effect when commanded
+                rover.position.z -= ROVER_SPEED * deltaTime * 0.5;
+            } else {
+                 // Slight dampening movement when neutral (simulating low friction)
+                 rover.position.z -= ROVER_SPEED * deltaTime * 0.1;
+            }
+            
+            // 2. Apply Stress Visuals
+            const speedFactor = 1.0; // Control speed of visual effect
+            const stressShake = (BCI_ADAPTATION === 'ADAPTING' || BCI_CONFIDENCE < 0.7) ? 0.05 : 0;
+            
+            // Random shake effect based on stress level
+            rover.position.x += (Math.random() - 0.5) * stressShake * speedFactor;
+            rover.position.y += (Math.random() - 0.5) * stressShake * speedFactor;
+            
+            // Keep rover near the origin for visualization simplicity
+            rover.position.x = THREE.MathUtils.lerp(rover.position.x, 0, 0.05);
+            rover.position.y = THREE.MathUtils.lerp(rover.position.y, 0, 0.05);
+            rover.position.z = THREE.MathUtils.lerp(rover.position.z, 0, 0.01);
+        }
+
+        function updateStatusDisplay() {
+            document.getElementById('bci-command').textContent = BCI_COMMAND;
+            document.getElementById('bci-confidence').textContent = BCI_CONFIDENCE.toFixed(2);
+            document.getElementById('bci-adapt').textContent = BCI_ADAPTATION;
+            
+            const commandElement = document.getElementById('bci-command');
+            commandElement.classList.remove('text-green-400', 'text-yellow-400', 'text-red-500');
+
+            if (BCI_ADAPTATION === 'ADAPTING') {
+                commandElement.classList.add('text-red-500');
+            } else if (BCI_CONFIDENCE > 0.8) {
+                commandElement.classList.add('text-green-400');
+            } else {
+                commandElement.classList.add('text-yellow-400');
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            updateRoverMovement();
+            updateStatusDisplay();
+
+            // Make the camera follow the rover slightly
+            const targetPosition = new THREE.Vector3(rover.position.x + 0, rover.position.y + 5, rover.position.z + 10);
+            camera.position.lerp(targetPosition, 0.02);
+            camera.lookAt(rover.position);
+
+            renderer.render(scene, camera);
+        }
+        
+        // Start the application after the window loads
+        window.onload = function () {
+            init();
+            animate();
+        }
+
+    </script>
+</body>
+</html>
