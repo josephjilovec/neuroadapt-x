@@ -1,0 +1,27 @@
+name: neuroadapt-x
+channels:
+
+conda-forge
+
+pytorch
+dependencies:
+
+python=3.10
+
+numpy
+
+pytorch
+
+scikit-learn
+
+matplotlib
+
+pandas
+
+jupyter
+
+ipykernel
+
+pytest
+
+mne
