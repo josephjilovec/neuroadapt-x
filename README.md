@@ -11,7 +11,7 @@ Video demo: [Soon!]
 
 ## Quick Start
 ```bash
-git clone https://github.com/yourusername/neuroadapt-x.git
+git clone https://github.com/josephjilovec/neuroadapt-x.git
 cd neuroadapt-x
 pip install -r requirements.txt
 
