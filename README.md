@@ -14,3 +14,9 @@ Video demo: [Soon!]
 git clone https://github.com/yourusername/neuroadapt-x.git
 cd neuroadapt-x
 pip install -r requirements.txt
+
+## Offline training:
+python src/models/train.py
+
+## Live demo:
+python src/demo/rover_control.py --live  # Or --replay for recorded data
