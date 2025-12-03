@@ -1,2 +1,3 @@
 # Recorded video of full flow
 # Place a pre-recorded video of the 05_live_test.ipynb notebook running inside this file
+# The video should clearly show the decoding accuracy dropping when stress starts, and then smoothly recovering as the adaptation loop runs.
